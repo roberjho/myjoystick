@@ -1,0 +1,302 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <title>Joystick BLE</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <style>
+    body {
+      font-family: sans-serif;
+      margin: 0;
+      padding: 0;
+      text-align: center;
+      background: #f5f5f5;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      height: 100vh;
+    }
+
+    #connect {
+      padding: 1em 2em;
+      font-size: 1.2em;
+      margin-bottom: 20px;
+    }
+
+    #joystick-container {
+      width: 300px;
+      height: 300px;
+      position: relative;
+      touch-action: none;
+    }
+
+    #joystick-base {
+      width: 100%;
+      height: 100%;
+      background: #e0e0e0;
+      border-radius: 50%;
+      position: absolute;
+    }
+
+    #joystick-thumb {
+      width: 80px;
+      height: 80px;
+      background: #da7373;
+      border-radius: 50%;
+      position: absolute;
+      top: 110px;
+      left: 110px;
+      transition: transform 0.05s;
+    }
+
+    #log {
+      margin-top: 20px;
+      height: 100px;
+      width: 90%;
+      max-width: 400px;
+      overflow-y: auto;
+      border: 1px dashed #999;
+      padding: 10px;
+      font-size: 0.9em;
+      background: white;
+    }
+  </style>
+</head>
+
+<body>
+  <button id="connect">🔌 Connect to Robot</button>
+  <div id="joystick-container">
+    <div id="joystick-base"></div>
+    <div id="joystick-thumb"></div>
+  </div>
+  <pre id="log">Not connected</pre>
+
+  <script>
+    const serviceUUID = "ef285d93-51b4-4996-b0d1-eade88331410";
+    const speedUUID = "9e7e0c71-af3e-4e37-8ee1-16692a5a69c5";
+    const turnUUID = "f8757a98-ba9e-49e9-bfc7-7885ee900dce";
+
+    let device, server, speedChar, turnChar;
+    let connected = false;
+    const logElement = document.getElementById("log");
+    const connectButton = document.getElementById("connect");
+
+    function log(msg) {
+      const atBottom = logElement.scrollHeight - logElement.scrollTop <= logElement.clientHeight + 1;
+      logElement.textContent += "\n" + msg;
+      console.log(msg);
+
+      if (atBottom) {
+        logElement.scrollTop = logElement.scrollHeight;
+      }
+    }
+
+    // BLE write handling with queuing system (from your working version)
+    let writeInProgress = false;
+    let queuedSpeedValue = null;
+    let queuedTurnValue = null;
+
+    async function writeCharacteristics() {
+      if (!connected) return;
+      if (writeInProgress) return;
+      writeInProgress = true;
+
+      try {
+        if (!server.connected) {
+          log("Was disconnected, reconnecting");
+          await server.connect();
+          await connectServices();
+          log("Reconnected to characteristics");
+        }
+
+        if (queuedSpeedValue !== null) {
+          let valueToWrite = queuedSpeedValue;
+          queuedSpeedValue = null; // Clear the queued value
+          await speedChar.writeValueWithResponse(getFloat32Buffer(valueToWrite));
+          console.log(`Speed written: ${valueToWrite}`);
+        }
+        
+        if (queuedTurnValue !== null) {
+          let valueToWrite = queuedTurnValue;
+          queuedTurnValue = null; // Clear the queued value
+          await turnChar.writeValueWithResponse(getFloat32Buffer(valueToWrite));
+          console.log(`Turn written: ${valueToWrite}`);
+        }
+      } catch (error) {
+        console.error("Failed to write:", error);
+        log("Failed to write: " + error);
+      } finally {
+        writeInProgress = false; // Reset the flag
+        if (queuedSpeedValue !== null || queuedTurnValue !== null) {
+          writeCharacteristics();
+        }
+      }
+    }
+
+    // Queue values to send instead of sending directly
+    function queueBLEValues(speed, turn) {
+      if (!connected) return;
+      
+      // Only update the log when values change significantly
+      const significantChange = 
+        (queuedSpeedValue === null || Math.abs(speed - queuedSpeedValue) > 0.05) || 
+        (queuedTurnValue === null || Math.abs(turn - queuedTurnValue) > 0.05);
+        
+      if (significantChange) {
+        log(`🕹️ Speed: ${speed.toFixed(2)} | Turn: ${turn.toFixed(2)}`);
+      }
+      
+      queuedSpeedValue = speed;
+      queuedTurnValue = turn;
+      writeCharacteristics();
+    }
+
+    async function connectServices() {
+      const service = await server.getPrimaryService(serviceUUID);
+      speedChar = await service.getCharacteristic(speedUUID);
+      turnChar = await service.getCharacteristic(turnUUID);
+    }
+
+    connectButton.addEventListener("click", async () => {
+      if (connected) {
+        // Disconnect
+        connected = false;
+        connectButton.innerText = "🔌 Connect to Robot";
+        try {
+          server.disconnect();
+          log("Disconnected");
+        } catch (error) {
+          log("Error disconnecting: " + error);
+        }
+        return;
+      }
+
+      try {
+        log("Looking for device...");
+        device = await navigator.bluetooth.requestDevice({
+          filters: [{ services: [serviceUUID] }]
+        });
+        
+        log("Device found");
+        server = await device.gatt.connect();
+        log("Server connected");
+        
+        await connectServices();
+        log("✅ Connected and characteristics ready.");
+        
+        connected = true;
+        connectButton.innerText = "Disconnect";
+      } catch (e) {
+        if (e instanceof DOMException) {
+          log("No device found");
+          return;
+        }
+        log("❌ Error: " + e);
+      }
+    });
+
+    function getFloat32Buffer(value) {
+      const buffer = new ArrayBuffer(4);
+      const view = new DataView(buffer);
+      view.setFloat32(0, value, true); // little-endian
+      return buffer;
+    }
+
+    const thumb = document.getElementById("joystick-thumb");
+    const base = document.getElementById("joystick-container");
+
+    let dragging = false;
+
+    function moveThumb(x, y) {
+      const rect = base.getBoundingClientRect();
+      const centerX = rect.width / 2;
+      const centerY = rect.height / 2;
+
+      const dx = x - centerX;
+      const dy = y - centerY;
+
+      const max = rect.width / 2 - 40;
+      const dist = Math.sqrt(dx * dx + dy * dy);
+      const ratio = dist > max ? max / dist : 1;
+      const clampedX = dx * ratio;
+      const clampedY = dy * ratio;
+
+      thumb.style.left = `${centerX + clampedX - 40}px`;
+      thumb.style.top = `${centerY + clampedY - 40}px`;
+
+      const normX = clampedX / max;
+      const normY = clampedY / max;
+
+      // Use the queuing system instead of direct writes
+      queueBLEValues(-normY, normX);
+    }
+
+    function resetThumb() {
+      const size = base.offsetWidth;
+      const center = size / 2 - 40;
+      thumb.style.left = `${center}px`;
+      thumb.style.top = `${center}px`;
+      
+      // Send zeros when joystick is released
+      queueBLEValues(0.0, 0.0);
+    }
+
+    // Mouse events
+    base.addEventListener("mousedown", (e) => {
+      dragging = true;
+      const rect = base.getBoundingClientRect();
+      moveThumb(e.clientX - rect.left, e.clientY - rect.top);
+    });
+
+    document.addEventListener("mousemove", (e) => {
+      if (!dragging) return;
+      const rect = base.getBoundingClientRect();
+      moveThumb(e.clientX - rect.left, e.clientY - rect.top);
+    });
+
+    document.addEventListener("mouseup", () => {
+      if (dragging) {
+        dragging = false;
+        resetThumb();
+      }
+    });
+
+    // Touch events
+    base.addEventListener("touchstart", (e) => {
+      dragging = true;
+      const rect = base.getBoundingClientRect();
+      const touch = e.touches[0];
+      moveThumb(touch.clientX - rect.left, touch.clientY - rect.top);
+      e.preventDefault();
+    }, { passive: false });
+
+    base.addEventListener("touchmove", (e) => {
+      if (!dragging) return;
+      const rect = base.getBoundingClientRect();
+      const touch = e.touches[0];
+      moveThumb(touch.clientX - rect.left, touch.clientY - rect.top);
+      e.preventDefault();
+    }, { passive: false });
+
+    document.addEventListener("touchend", () => {
+      if (dragging) {
+        dragging = false;
+        resetThumb();
+      }
+    });
+
+    // Error handling
+    window.addEventListener("error", (e) => {
+      log("Error: " + e.message);
+    });
+    
+    window.addEventListener("unhandledrejection", (e) => {
+      log("Unexpected error: " + e.reason);
+    });
+
+    // Init thumb
+    resetThumb();
+  </script>
+</body>
+</html>
