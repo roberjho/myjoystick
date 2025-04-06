@@ -1,0 +1,508 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <title>Joystick BLE - Obstacle Course Edition</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <style>
+    body {
+      font-family: sans-serif;
+      margin: 0;
+      padding: 0;
+      text-align: center;
+      background: #f5f5f5;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      height: 100vh;
+    }
+
+    #connect {
+      padding: 1em 2em;
+      font-size: 1.2em;
+      margin-bottom: 20px;
+    }
+
+    #joystick-container {
+      width: 300px;
+      height: 300px;
+      position: relative;
+      touch-action: none;
+      margin-bottom: 10px;
+    }
+
+    #joystick-base {
+      width: 100%;
+      height: 100%;
+      background: #e0e0e0;
+      border-radius: 50%;
+      position: absolute;
+    }
+
+    #joystick-thumb {
+      width: 80px;
+      height: 80px;
+      background: #da7373;
+      border-radius: 50%;
+      position: absolute;
+      top: 110px;
+      left: 110px;
+      transition: transform 0.05s;
+    }
+
+    #joystick-guide {
+      position: absolute;
+      width: 160px;
+      height: 160px;
+      border: 2px dashed #999;
+      border-radius: 50%;
+      top: 70px;
+      left: 70px;
+      pointer-events: none;
+    }
+
+    #control-panel {
+      display: flex;
+      flex-direction: column;
+      width: 300px;
+      gap: 10px;
+      margin-bottom: 10px;
+    }
+
+    .control-row {
+      display: flex;
+      justify-content: space-between;
+      gap: 10px;
+    }
+
+    button {
+      flex: 1;
+      padding: 10px;
+      border: none;
+      border-radius: 5px;
+      background: #4CAF50;
+      color: white;
+      font-weight: bold;
+      cursor: pointer;
+      user-select: none;
+      touch-action: manipulation;
+    }
+
+    button.active {
+      background-color: #f44336;
+    }
+
+    #break-button {
+      background-color: #FF9800;
+    }
+
+    #precision-button {
+      background-color: #2196F3;
+    }
+
+    #center-button {
+      background-color: #9C27B0;
+    }
+
+    #log {
+      margin-top: 10px;
+      height: 100px;
+      width: 300px;
+      overflow-y: auto;
+      border: 1px dashed #999;
+      padding: 10px;
+      font-size: 0.9em;
+      background: white;
+      text-align: left;
+    }
+    
+    .speed-indicator {
+      height: 20px;
+      background: linear-gradient(to right, #4CAF50, #FFEB3B, #FF5722);
+      border-radius: 10px;
+      margin-top: 5px;
+      position: relative;
+      overflow: hidden;
+    }
+    
+    #speed-marker {
+      position: absolute;
+      width: 4px;
+      height: 20px;
+      background: #000;
+      top: 0;
+      left: 50%;
+      transition: left 0.1s;
+    }
+  </style>
+</head>
+
+<body>
+  <button id="connect">🔌 Connect to Robot</button>
+  
+  <div id="joystick-container">
+    <div id="joystick-base"></div>
+    <div id="joystick-guide"></div>
+    <div id="joystick-thumb"></div>
+  </div>
+  
+  <div class="speed-indicator">
+    <div id="speed-marker"></div>
+  </div>
+  
+  <div id="control-panel">
+    <div class="control-row">
+      <button id="break-button">Break Mode</button>
+      <button id="precision-button">Precision</button>
+    </div>
+    <div class="control-row">
+      <button id="center-button">Re-Center</button>
+    </div>
+  </div>
+  
+  <pre id="log">Not connected</pre>
+
+  <script>
+    const serviceUUID = "ef285d93-51b4-4996-b0d1-eade88331410";
+    const speedUUID = "9e7e0c71-af3e-4e37-8ee1-16692a5a69c5";
+    const turnUUID = "f8757a98-ba9e-49e9-bfc7-7885ee900dce";
+
+    let device, server, speedChar, turnChar;
+    let connected = false;
+    let breakModeActive = false;
+    let precisionModeActive = false;
+    
+    const BREAK_SPEED_FACTOR = 0.3; // Reduce speed to 30% in break mode
+    const PRECISION_SPEED_FACTOR = 0.6; // Reduce speed to 60% in precision mode
+    const PRECISION_TURN_FACTOR = 0.8; // Reduce turn sensitivity slightly in precision mode
+    
+    const logElement = document.getElementById("log");
+    const connectButton = document.getElementById("connect");
+    const breakButton = document.getElementById("break-button");
+    const precisionButton = document.getElementById("precision-button");
+    const centerButton = document.getElementById("center-button");
+    const speedMarker = document.getElementById("speed-marker");
+    
+    // Make sure we have required HTML elements
+    [logElement, connectButton, breakButton, precisionButton, centerButton, speedMarker].forEach(el => {
+      if (!el) console.error("Missing UI element!");
+    });
+
+    function log(msg) {
+      const atBottom = logElement.scrollHeight - logElement.scrollTop <= logElement.clientHeight + 1;
+      const timestamp = new Date().toLocaleTimeString().split(" ")[0];
+      logElement.textContent = `[${timestamp}] ${msg}\n` + logElement.textContent;
+
+      if (atBottom) {
+        logElement.scrollTop = logElement.scrollHeight;
+      }
+    }
+
+    // BLE write handling with queuing system
+    let writeInProgress = false;
+    let queuedSpeedValue = null;
+    let queuedTurnValue = null;
+    let lastWriteTime = 0;
+    const WRITE_INTERVAL_MS = 50; // Limit write frequency
+
+    async function writeCharacteristics() {
+      if (!connected) return;
+      if (writeInProgress) return;
+      
+      const now = Date.now();
+      if (now - lastWriteTime < WRITE_INTERVAL_MS) {
+        // Schedule a write for later if we're writing too frequently
+        setTimeout(writeCharacteristics, WRITE_INTERVAL_MS - (now - lastWriteTime));
+        return;
+      }
+      
+      writeInProgress = true;
+      lastWriteTime = now;
+
+      try {
+        if (!server || !server.connected) {
+          log("📡 Reconnecting...");
+          await reconnect();
+        }
+
+        if (queuedSpeedValue !== null) {
+          let valueToWrite = queuedSpeedValue;
+          await speedChar.writeValueWithResponse(getFloat32Buffer(valueToWrite));
+          
+          // Update speed indicator
+          updateSpeedIndicator(valueToWrite);
+        }
+        
+        if (queuedTurnValue !== null) {
+          let valueToWrite = queuedTurnValue;
+          await turnChar.writeValueWithResponse(getFloat32Buffer(valueToWrite));
+        }
+      } catch (error) {
+        console.error("Failed to write:", error);
+        log("❌ Write failed: " + error.message);
+      } finally {
+        writeInProgress = false;
+        // Process any new values that came in during the write
+        if (queuedSpeedValue !== null || queuedTurnValue !== null) {
+          writeCharacteristics();
+        }
+      }
+    }
+    
+    async function reconnect() {
+      try {
+        if (device && device.gatt) {
+          server = await device.gatt.connect();
+          await connectServices();
+          log("✅ Reconnected");
+          return true;
+        }
+        return false;
+      } catch (e) {
+        log("❌ Reconnect failed");
+        return false;
+      }
+    }
+    
+    function updateSpeedIndicator(speed) {
+      // Set the position of the speed marker (0-100%)
+      const percentage = 50 + (speed * 50);
+      speedMarker.style.left = `${percentage}%`;
+    }
+
+    // Queue values to send
+    function queueBLEValues(speed, turn) {
+      if (!connected) return;
+      
+      // Apply control mode factors
+      let adjustedSpeed = speed;
+      let adjustedTurn = turn;
+      
+      if (breakModeActive) {
+        adjustedSpeed *= BREAK_SPEED_FACTOR;
+      }
+      
+      if (precisionModeActive) {
+        adjustedSpeed *= PRECISION_SPEED_FACTOR;
+        adjustedTurn *= PRECISION_TURN_FACTOR;
+      }
+      
+      // Only log significant changes
+      const significantChange = 
+        (queuedSpeedValue === null || Math.abs(adjustedSpeed - queuedSpeedValue) > 0.05) || 
+        (queuedTurnValue === null || Math.abs(adjustedTurn - queuedTurnValue) > 0.05);
+        
+      if (significantChange) {
+        let modeText = breakModeActive ? "[BREAK]" : "";
+        modeText += precisionModeActive ? "[PRECISION]" : "";
+        
+        if (modeText) {
+          log(`🕹️ ${modeText} S: ${adjustedSpeed.toFixed(2)} | T: ${adjustedTurn.toFixed(2)}`);
+        }
+      }
+      
+      queuedSpeedValue = adjustedSpeed;
+      queuedTurnValue = adjustedTurn;
+      writeCharacteristics();
+    }
+
+    async function connectServices() {
+      const service = await server.getPrimaryService(serviceUUID);
+      speedChar = await service.getCharacteristic(speedUUID);
+      turnChar = await service.getCharacteristic(turnUUID);
+    }
+
+    connectButton.addEventListener("click", async () => {
+      if (connected) {
+        // Disconnect
+        connected = false;
+        connectButton.innerText = "🔌 Connect to Robot";
+        connectButton.style.backgroundColor = "#4CAF50";
+        try {
+          if (server) server.disconnect();
+          log("Disconnected");
+        } catch (error) {
+          log("Error disconnecting: " + error);
+        }
+        return;
+      }
+
+      try {
+        log("Looking for robot...");
+        device = await navigator.bluetooth.requestDevice({
+          filters: [{ services: [serviceUUID] }]
+        });
+        
+        log("Robot found");
+        server = await device.gatt.connect();
+        log("Connected to GATT server");
+        
+        await connectServices();
+        log("✅ Connected and ready");
+        
+        connected = true;
+        connectButton.innerText = "Disconnect";
+        connectButton.style.backgroundColor = "#f44336";
+        
+        // Send initial zero values
+        queueBLEValues(0.0, 0.0);
+      } catch (e) {
+        if (e.name === "NotFoundError") {
+          log("❌ No robot found. Please try again.");
+          return;
+        }
+        log("❌ Connection error: " + e.message);
+      }
+    });
+    
+    // Break button functionality
+    breakButton.addEventListener("mousedown", activateBreakMode);
+    breakButton.addEventListener("touchstart", (e) => {
+      activateBreakMode();
+      e.preventDefault();
+    }, { passive: false });
+    
+    document.addEventListener("mouseup", deactivateBreakMode);
+    document.addEventListener("touchend", deactivateBreakMode);
+    document.addEventListener("mouseleave", deactivateBreakMode);
+    document.addEventListener("touchcancel", deactivateBreakMode);
+    
+    function activateBreakMode() {
+      if (!breakModeActive) {
+        breakModeActive = true;
+        breakButton.classList.add("active");
+        log("🐢 Break mode ON");
+        updateJoystickWithCurrentMode();
+      }
+    }
+    
+    function deactivateBreakMode() {
+      if (breakModeActive) {
+        breakModeActive = false;
+        breakButton.classList.remove("active");
+        log("🚀 Break mode OFF");
+        updateJoystickWithCurrentMode();
+      }
+    }
+    
+    // Precision mode toggle
+    precisionButton.addEventListener("click", () => {
+      precisionModeActive = !precisionModeActive;
+      
+      if (precisionModeActive) {
+        precisionButton.classList.add("active");
+        log("🎯 Precision mode ON");
+      } else {
+        precisionButton.classList.remove("active");
+        log("🎯 Precision mode OFF");
+      }
+      
+      // Send special command to robot to toggle precision mode
+      if (connected) {
+        // Use a special signal value combination to indicate mode change
+        // This would need corresponding handling in your ESP32 code
+        queueBLEValues(precisionModeActive ? -0.001 : -0.002, 0);
+        
+        // Quick reset to avoid movement
+        setTimeout(() => {
+          if (dragging) {
+            updateJoystickWithCurrentMode();
+          } else {
+            queueBLEValues(0, 0);
+          }
+        }, 100);
+      }
+    });
+    
+    // Center button click - reset yaw reference
+    centerButton.addEventListener("click", () => {
+      if (connected) {
+        log("🧭 Resetting orientation");
+        
+        // Send special signal to indicate reset command
+        // This would need corresponding handling in ESP32
+        queueBLEValues(0, -0.001);
+        
+        // Quick reset to avoid movement
+        setTimeout(() => {
+          if (!dragging) {
+            queueBLEValues(0, 0);
+          } else {
+            updateJoystickWithCurrentMode();
+          }
+        }, 100);
+      }
+    });
+    
+    // Update joystick values when mode changes
+    function updateJoystickWithCurrentMode() {
+      if (dragging) {
+        const rect = base.getBoundingClientRect();
+        const centerX = rect.width / 2;
+        const centerY = rect.height / 2;
+        
+        // Extract current thumb position
+        const thumbRect = thumb.getBoundingClientRect();
+        const thumbCenterX = thumbRect.left + thumbRect.width / 2 - rect.left;
+        const thumbCenterY = thumbRect.top + thumbRect.height / 2 - rect.top;
+        
+        // Calculate normalized values
+        const max = rect.width / 2 - 40;
+        const normX = (thumbCenterX - centerX) / max;
+        const normY = (thumbCenterY - centerY) / max;
+        
+        // Send updated values with current modes applied
+        queueBLEValues(-normY, normX);
+      }
+    }
+
+    function getFloat32Buffer(value) {
+      const buffer = new ArrayBuffer(4);
+      const view = new DataView(buffer);
+      view.setFloat32(0, value, true); // little-endian
+      return buffer;
+    }
+
+    const thumb = document.getElementById("joystick-thumb");
+    const base = document.getElementById("joystick-container");
+
+    let dragging = false;
+    
+    // Enhanced joystick logic with improved response curve
+    function moveThumb(x, y) {
+      const rect = base.getBoundingClientRect();
+      const centerX = rect.width / 2;
+      const centerY = rect.height / 2;
+
+      const dx = x - centerX;
+      const dy = y - centerY;
+
+      const max = rect.width / 2 - 40;
+      
+      // Calculate distance from center
+      const dist = Math.sqrt(dx * dx + dy * dy);
+      
+      // Apply improved non-linear response curve for better control
+      // - More precision near center
+      // - Full range still available for quick movements
+      let ratio;
+      if (dist <= max * 0.5) {
+        // More sensitive in first half of range
+        ratio = dist > 0 ? (dist / max) * 0.9 : 0;
+      } else {
+        // Progressive curve in outer half
+        const t = (dist - max * 0.5) / (max * 0.5);
+        ratio = 0.45 + 0.55 * t;
+      }
+      
+      // Cap at maximum range
+      ratio = Math.min(1.0, ratio);
+      
+      // Scale direction vector by ratio
+      const normDist = dist > 0 ? dist : 1;
+      const clampedX = dx * ratio * max / normDist;
+      const clampedY = dy * ratio * max / normDist;
+
+      // Update visual position
+      thumb.style.left = `${centerX + cl
