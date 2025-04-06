@@ -1,0 +1,589 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <title>Robot Controller</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <style>
+    * {
+      box-sizing: border-box;
+      -webkit-touch-callout: none;
+      -webkit-user-select: none;
+      user-select: none;
+    }
+    
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, sans-serif;
+      margin: 0;
+      padding: 20px;
+      background: #f0f0f0;
+      height: 100vh;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: space-between;
+      touch-action: none;
+      position: fixed;
+      width: 100%;
+      overflow: hidden;
+    }
+
+    .header {
+      width: 100%;
+      text-align: center;
+      margin-bottom: 10px;
+    }
+
+    .title {
+      font-size: 22px;
+      font-weight: bold;
+      margin: 0;
+      color: #333;
+    }
+
+    #connect-btn {
+      background-color: #4286f4;
+      color: white;
+      border: none;
+      padding: 12px 20px;
+      border-radius: 50px;
+      font-size: 16px;
+      font-weight: bold;
+      margin: 15px 0;
+      box-shadow: 0 2px 5px rgba(0,0,0,0.2);
+    }
+
+    #connect-btn:active {
+      background-color: #3268c0;
+      transform: translateY(2px);
+    }
+
+    .controls-area {
+      width: 100%;
+      max-width: 500px;
+      flex-grow: 1;
+      display: flex;
+      flex-direction: column;
+      justify-content: center;
+      align-items: center;
+      position: relative;
+    }
+
+    #joystick-zone {
+      width: 280px;
+      height: 280px;
+      position: relative;
+      background: #e0e0e0;
+      border-radius: 50%;
+      box-shadow: inset 0 0 10px rgba(0,0,0,0.2);
+      touch-action: none;
+    }
+
+    #joystick-knob {
+      width: 100px;
+      height: 100px;
+      border-radius: 50%;
+      background: #e74c3c;
+      position: absolute;
+      top: 50%;
+      left: 50%;
+      transform: translate(-50%, -50%);
+      box-shadow: 0 3px 6px rgba(0,0,0,0.3);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      color: white;
+      font-weight: bold;
+    }
+
+    #joystick-knob::after {
+      content: "";
+      display: block;
+      width: 20px;
+      height: 20px;
+      background: rgba(255,255,255,0.5);
+      border-radius: 50%;
+    }
+
+    #precision-toggle {
+      position: absolute;
+      bottom: -80px;
+      left: 50%;
+      transform: translateX(-50%);
+      background: #2ecc71;
+      border: none;
+      color: white;
+      padding: 15px 0;
+      border-radius: 50px;
+      width: 200px;
+      font-size: 16px;
+      font-weight: bold;
+      box-shadow: 0 2px 5px rgba(0,0,0,0.2);
+    }
+
+    #precision-toggle.active {
+      background: #f39c12;
+    }
+
+    #precision-toggle:active {
+      transform: translateX(-50%) translateY(2px);
+    }
+
+    .footer {
+      width: 100%;
+      max-width: 500px;
+      margin-top: 20px;
+    }
+
+    #log {
+      height: 60px;
+      overflow-y: auto;
+      border: 1px solid #ccc;
+      padding: 8px;
+      font-size: 12px;
+      background: white;
+      border-radius: 5px;
+      font-family: monospace;
+      color: #333;
+    }
+
+    .status {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-top: 5px;
+      font-size: 14px;
+    }
+
+    .status span {
+      display: flex;
+      align-items: center;
+      gap: 5px;
+    }
+
+    .indicator {
+      display: inline-block;
+      width: 12px;
+      height: 12px;
+      border-radius: 50%;
+      background-color: #ccc;
+    }
+
+    .connected .indicator {
+      background-color: #2ecc71;
+    }
+
+    .precision .indicator {
+      background-color: #f39c12;
+    }
+  </style>
+</head>
+
+<body>
+  <div class="header">
+    <h1 class="title">Robot Controller</h1>
+    <button id="connect-btn">Connect to Robot</button>
+  </div>
+
+  <div class="controls-area">
+    <div id="joystick-zone">
+      <div id="joystick-knob"></div>
+    </div>
+    <button id="precision-toggle">Precision Mode</button>
+  </div>
+
+  <div class="footer">
+    <div id="log">Ready to connect...</div>
+    <div class="status">
+      <span class="connection-status">
+        <i class="indicator"></i> Disconnected
+      </span>
+      <span class="precision-status">
+        <i class="indicator"></i> Normal Mode
+      </span>
+    </div>
+  </div>
+
+  <script>
+    // BLE UUIDs
+    const serviceUUID = "ef285d93-51b4-4996-b0d1-eade88331410";
+    const speedUUID = "9e7e0c71-af3e-4e37-8ee1-16692a5a69c5";
+    const turnUUID = "f8757a98-ba9e-49e9-bfc7-7885ee900dce";
+
+    // Elements
+    const connectBtn = document.getElementById('connect-btn');
+    const joystickZone = document.getElementById('joystick-zone');
+    const joystickKnob = document.getElementById('joystick-knob');
+    const precisionToggle = document.getElementById('precision-toggle');
+    const logElement = document.getElementById('log');
+    const connectionStatus = document.querySelector('.connection-status');
+    const precisionStatus = document.querySelector('.precision-status');
+
+    // State variables
+    let device, server, speedChar, turnChar;
+    let connected = false;
+    let precisionMode = false;
+    let joystickActive = false;
+    let currentTouchId = null;
+    
+    // Control settings
+    const PRECISION_SPEED_FACTOR = 0.3;  // 30% speed in precision mode
+    const PRECISION_TURN_FACTOR = 1.8;   // 180% turning sensitivity in precision mode
+    const DEADZONE = 0.05;               // Small centered deadzone
+
+    // For BLE write queue
+    let writeInProgress = false;
+    let queuedSpeedValue = null;
+    let queuedTurnValue = null;
+    let lastLoggedSpeed = null;
+    let lastLoggedTurn = null;
+
+    // Logging function with timestamp
+    function log(message) {
+      const time = new Date().toLocaleTimeString('en-US', { 
+        hour12: false, 
+        hour: '2-digit', 
+        minute: '2-digit',
+        second: '2-digit'
+      });
+      
+      logElement.innerHTML += `<div>[${time}] ${message}</div>`;
+      logElement.scrollTop = logElement.scrollHeight;
+      
+      // Limit log entries
+      if (logElement.children.length > 20) {
+        logElement.removeChild(logElement.children[0]);
+      }
+      
+      console.log(`[${time}] ${message}`);
+    }
+
+    // Update UI states
+    function updateConnectionUI(isConnected) {
+      if (isConnected) {
+        connectBtn.textContent = 'Disconnect';
+        connectionStatus.innerHTML = '<i class="indicator"></i> Connected';
+        connectionStatus.classList.add('connected');
+      } else {
+        connectBtn.textContent = 'Connect to Robot';
+        connectionStatus.innerHTML = '<i class="indicator"></i> Disconnected';
+        connectionStatus.classList.remove('connected');
+      }
+    }
+
+    function updatePrecisionUI(isPrecision) {
+      if (isPrecision) {
+        precisionToggle.textContent = 'Precision Mode: ON';
+        precisionToggle.classList.add('active');
+        precisionStatus.innerHTML = '<i class="indicator"></i> Precision Mode';
+        precisionStatus.classList.add('precision');
+      } else {
+        precisionToggle.textContent = 'Precision Mode';
+        precisionToggle.classList.remove('active');
+        precisionStatus.innerHTML = '<i class="indicator"></i> Normal Mode';
+        precisionStatus.classList.remove('precision');
+      }
+    }
+
+    // Connect to BLE device
+    async function connectToDevice() {
+      try {
+        log("Scanning for robot...");
+        device = await navigator.bluetooth.requestDevice({
+          filters: [{ services: [serviceUUID] }]
+        });
+        
+        log("Robot found! Connecting...");
+        server = await device.gatt.connect();
+        
+        log("Connected to robot");
+        const service = await server.getPrimaryService(serviceUUID);
+        speedChar = await service.getCharacteristic(speedUUID);
+        turnChar = await service.getCharacteristic(turnUUID);
+        
+        log("Control connection established ✅");
+        connected = true;
+        updateConnectionUI(true);
+        
+        // Set up disconnect listener
+        device.addEventListener('gattserverdisconnected', handleDisconnect);
+        
+        return true;
+      } catch (error) {
+        if (error.name === 'NotFoundError') {
+          log("No robot found. Try again.");
+        } else {
+          log(`Connection error: ${error.message}`);
+          console.error(error);
+        }
+        connected = false;
+        updateConnectionUI(false);
+        return false;
+      }
+    }
+
+    // Handle disconnection
+    function handleDisconnect() {
+      log("Lost connection to robot");
+      connected = false;
+      updateConnectionUI(false);
+    }
+
+    // Disconnect from device
+    function disconnectFromDevice() {
+      if (server) {
+        try {
+          server.disconnect();
+          log("Disconnected from robot");
+        } catch (error) {
+          log(`Error during disconnect: ${error.message}`);
+        }
+      }
+      connected = false;
+      updateConnectionUI(false);
+    }
+
+    // Convert float to buffer for BLE
+    function getFloat32Buffer(value) {
+      const buffer = new ArrayBuffer(4);
+      const view = new DataView(buffer);
+      view.setFloat32(0, value, true); // little-endian
+      return buffer;
+    }
+
+    // Write values to BLE characteristics
+    async function writeCharacteristics() {
+      if (!connected || writeInProgress) return;
+      writeInProgress = true;
+
+      try {
+        if (queuedSpeedValue !== null) {
+          let valueToWrite = queuedSpeedValue;
+          queuedSpeedValue = null;
+          await speedChar.writeValueWithResponse(getFloat32Buffer(valueToWrite));
+        }
+        
+        if (queuedTurnValue !== null) {
+          let valueToWrite = queuedTurnValue;
+          queuedTurnValue = null;
+          await turnChar.writeValueWithResponse(getFloat32Buffer(valueToWrite));
+        }
+      } catch (error) {
+        console.error("BLE write error:", error);
+        log("Communication error");
+        
+        // Try to reconnect if we've lost connection
+        if (!server.connected) {
+          try {
+            log("Reconnecting...");
+            await server.connect();
+            const service = await server.getPrimaryService(serviceUUID);
+            speedChar = await service.getCharacteristic(speedUUID);
+            turnChar = await service.getCharacteristic(turnUUID);
+            log("Reconnected ✅");
+          } catch (reconnectError) {
+            log("Failed to reconnect");
+            connected = false;
+            updateConnectionUI(false);
+          }
+        }
+      } finally {
+        writeInProgress = false;
+        if (queuedSpeedValue !== null || queuedTurnValue !== null) {
+          writeCharacteristics();
+        }
+      }
+    }
+
+    // Queue values and write to BLE
+    function queueValues(speed, turn) {
+      if (!connected) return;
+      
+      // Apply precision mode modifiers
+      if (precisionMode) {
+        speed *= PRECISION_SPEED_FACTOR;
+        turn *= PRECISION_TURN_FACTOR;
+      }
+      
+      // Apply deadzone
+      if (Math.abs(speed) < DEADZONE) speed = 0;
+      if (Math.abs(turn) < DEADZONE) turn = 0;
+      
+      // Round to 2 decimal places to prevent noise
+      speed = Math.round(speed * 100) / 100;
+      turn = Math.round(turn * 100) / 100;
+      
+      // Only log when values change significantly
+      if (lastLoggedSpeed === null || 
+          lastLoggedTurn === null || 
+          Math.abs(speed - lastLoggedSpeed) > 0.05 || 
+          Math.abs(turn - lastLoggedTurn) > 0.05) {
+        
+        if (speed !== 0 || turn !== 0) {
+          const modeText = precisionMode ? "🐢" : "🚀";
+          log(`${modeText} Speed: ${speed.toFixed(2)} | Turn: ${turn.toFixed(2)}`);
+          lastLoggedSpeed = speed;
+          lastLoggedTurn = turn;
+        } else if (lastLoggedSpeed !== 0 || lastLoggedTurn !== 0) {
+          log("⏹️ Stopped");
+          lastLoggedSpeed = 0;
+          lastLoggedTurn = 0;
+        }
+      }
+      
+      queuedSpeedValue = speed;
+      queuedTurnValue = turn;
+      writeCharacteristics();
+    }
+
+    // Joystick position handling
+    function updateJoystickPosition(clientX, clientY) {
+      const rect = joystickZone.getBoundingClientRect();
+      const centerX = rect.width / 2;
+      const centerY = rect.height / 2;
+      
+      // Calculate position relative to center
+      let deltaX = clientX - rect.left - centerX;
+      let deltaY = clientY - rect.top - centerY;
+      
+      // Get distance from center
+      const distance = Math.sqrt(deltaX * deltaX + deltaY * deltaY);
+      const maxDistance = rect.width / 2 - joystickKnob.offsetWidth / 2;
+      
+      // Clamp distance
+      if (distance > maxDistance) {
+        const scale = maxDistance / distance;
+        deltaX *= scale;
+        deltaY *= scale;
+      }
+      
+      // Calculate position
+      const knobX = centerX + deltaX - (joystickKnob.offsetWidth / 2);
+      const knobY = centerY + deltaY - (joystickKnob.offsetHeight / 2);
+      
+      // Move joystick knob
+      joystickKnob.style.left = `${knobX}px`;
+      joystickKnob.style.top = `${knobY}px`;
+      joystickKnob.style.transform = 'none';
+      
+      // Calculate normalized values (-1 to 1)
+      const normX = deltaX / maxDistance;
+      const normY = -deltaY / maxDistance; // Invert Y for driving
+      
+      // Queue values to send
+      queueValues(normY, normX);
+    }
+
+    // Reset joystick to center
+    function resetJoystick() {
+      joystickKnob.style.left = '50%';
+      joystickKnob.style.top = '50%';
+      joystickKnob.style.transform = 'translate(-50%, -50%)';
+      
+      // Stop the robot
+      queueValues(0, 0);
+    }
+
+    // Connect button handler
+    connectBtn.addEventListener('click', async () => {
+      if (connected) {
+        disconnectFromDevice();
+      } else {
+        await connectToDevice();
+      }
+    });
+
+    // Precision mode toggle handler
+    precisionToggle.addEventListener('click', () => {
+      precisionMode = !precisionMode;
+      updatePrecisionUI(precisionMode);
+      
+      // If joystick is active, update values with new precision setting
+      if (joystickActive) {
+        const rect = joystickZone.getBoundingClientRect();
+        const knobRect = joystickKnob.getBoundingClientRect();
+        
+        const centerX = rect.left + rect.width / 2;
+        const centerY = rect.top + rect.height / 2;
+        const knobCenterX = knobRect.left + knobRect.width / 2;
+        const knobCenterY = knobRect.top + knobRect.height / 2;
+        
+        updateJoystickPosition(knobCenterX, knobCenterY);
+      }
+    });
+
+    // Mouse events for joystick
+    joystickZone.addEventListener('mousedown', (e) => {
+      joystickActive = true;
+      updateJoystickPosition(e.clientX, e.clientY);
+      e.preventDefault();
+    });
+
+    document.addEventListener('mousemove', (e) => {
+      if (joystickActive) {
+        updateJoystickPosition(e.clientX, e.clientY);
+        e.preventDefault();
+      }
+    });
+
+    document.addEventListener('mouseup', () => {
+      if (joystickActive) {
+        joystickActive = false;
+        resetJoystick();
+      }
+    });
+
+    // Touch events for joystick
+    joystickZone.addEventListener('touchstart', (e) => {
+      if (currentTouchId === null && e.touches.length > 0) {
+        joystickActive = true;
+        currentTouchId = e.touches[0].identifier;
+        updateJoystickPosition(e.touches[0].clientX, e.touches[0].clientY);
+      }
+      e.preventDefault();
+    }, { passive: false });
+
+    document.addEventListener('touchmove', (e) => {
+      if (joystickActive && currentTouchId !== null) {
+        // Find the touch point with our stored ID
+        for (let i = 0; i < e.touches.length; i++) {
+          if (e.touches[i].identifier === currentTouchId) {
+            updateJoystickPosition(e.touches[i].clientX, e.touches[i].clientY);
+            break;
+          }
+        }
+      }
+      e.preventDefault();
+    }, { passive: false });
+
+    document.addEventListener('touchend', (e) => {
+      // Check if our touch ended
+      for (let i = 0; i < e.changedTouches.length; i++) {
+        if (e.changedTouches[i].identifier === currentTouchId) {
+          joystickActive = false;
+          currentTouchId = null;
+          resetJoystick();
+          break;
+        }
+      }
+    });
+
+    document.addEventListener('touchcancel', (e) => {
+      // Check if our touch was canceled
+      for (let i = 0; i < e.changedTouches.length; i++) {
+        if (e.changedTouches[i].identifier === currentTouchId) {
+          joystickActive = false;
+          currentTouchId = null;
+          resetJoystick();
+          break;
+        }
+      }
+    });
+
+    // Initialize UI
+    updateConnectionUI(false);
+    updatePrecisionUI(false);
+    log("Controller ready. Connect to robot to begin.");
+  </script>
+</body>
+</html>
