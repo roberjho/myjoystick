@@ -2,7 +2,7 @@
 <html>
 <head>
   <meta charset="utf-8">
-  <title>Joystick BLE</title>
+  <title>Joystick BLE - Enhanced</title>
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
   <style>
     body {
@@ -26,27 +26,44 @@
       flex: 1;
       display: flex;
       flex-direction: column;
-      padding: 20px;
       justify-content: center;
       align-items: center;
+      position: relative;
     }
 
     .right-panel {
       flex: 1;
       display: flex;
+      flex-direction: column;
       justify-content: center;
       align-items: center;
     }
 
-    #connect {
-      padding: 12px 24px;
-      font-size: 1.2em;
-      margin-bottom: 20px;
-      background-color: #4c84af;
-      color: white;
-      border: none;
-      border-radius: 8px;
+    #connect-image {
+      width: 80%;
+      height: 80%;
+      object-fit: contain;
       cursor: pointer;
+      transition: transform 0.2s, box-shadow 0.3s;
+      border-radius: 10px;
+    }
+
+    #connect-image:hover {
+      transform: scale(1.02);
+    }
+
+    #connect-image.connected {
+      box-shadow: 0 0 20px rgba(76, 175, 80, 0.7);
+    }
+
+    #connect-image.connecting {
+      animation: pulse 1.5s infinite;
+    }
+
+    @keyframes pulse {
+      0% { box-shadow: 0 0 0 0 rgba(66, 133, 244, 0.7); }
+      70% { box-shadow: 0 0 0 15px rgba(66, 133, 244, 0); }
+      100% { box-shadow: 0 0 0 0 rgba(66, 133, 244, 0); }
     }
 
     #joystick-container {
@@ -54,77 +71,201 @@
       height: 280px;
       position: relative;
       touch-action: none;
+      margin-bottom: 20px;
     }
 
     #joystick-base {
       width: 100%;
       height: 100%;
-      background: #e0e0e0;
+      background: radial-gradient(circle, #f0f0f0 60%, #d0d0d0 100%);
       border-radius: 50%;
       position: absolute;
-      box-shadow: inset 0 0 10px rgba(0,0,0,0.2);
+      box-shadow: inset 0 0 15px rgba(0,0,0,0.2);
     }
 
     #joystick-thumb {
       width: 80px;
       height: 80px;
-      background: #da7373;
+      background: radial-gradient(circle, #e86868 40%, #da7373 100%);
       border-radius: 50%;
       position: absolute;
       top: 100px;
       left: 100px;
       transition: transform 0.05s;
-      box-shadow: 0 3px 6px rgba(0,0,0,0.2);
+      box-shadow: 0 3px 6px rgba(0,0,0,0.3);
+    }
+
+    #joystick-indicator {
+      position: absolute;
+      width: 2px;
+      height: 2px;
+      background: rgba(0, 0, 0, 0.3);
+      border-radius: 50%;
+      top: 50%;
+      left: 50%;
+      transform: translate(-50%, -50%);
+    }
+
+    #joystick-values {
+      font-size: 0.9em;
+      color: #333;
+      margin-top: 10px;
+      text-align: center;
+      font-family: monospace;
+      background: rgba(255, 255, 255, 0.7);
+      padding: 8px;
+      border-radius: 8px;
+      box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+    }
+
+    .status-panel {
+      position: absolute;
+      top: 10px;
+      left: 10px;
+      right: 10px;
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+      z-index: 20;
+    }
+
+    .connection-status {
+      font-size: 1em;
+      padding: 8px 15px;
+      background-color: rgba(0, 0, 0, 0.7);
+      color: white;
+      border-radius: 20px;
+      transition: all 0.3s;
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+
+    .status-indicator {
+      width: 15px;
+      height: 15px;
+      border-radius: 50%;
+      background-color: #ccc;
+    }
+
+    .status-connected {
+      background-color: #4CAF50;
+      box-shadow: 0 0 8px #4CAF50;
+    }
+
+    .status-connecting {
+      background-color: #FFC107;
+      animation: blink 1s infinite;
+    }
+
+    .status-disconnected {
+      background-color: #F44336;
+    }
+
+    @keyframes blink {
+      0% { opacity: 0.5; }
+      50% { opacity: 1; }
+      100% { opacity: 0.5; }
+    }
+
+    .control-panel {
+      position: absolute;
+      bottom: 20px;
+      left: 20px;
+      right: 20px;
+      display: flex;
+      justify-content: center;
+      gap: 20px;
+    }
+
+    .control-group {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+    }
+
+    .control-label {
+      font-size: 0.8em;
+      margin-bottom: 5px;
+      color: #555;
+    }
+
+    input[type="range"] {
+      width: 100px;
+      margin: 0;
+    }
+
+    #battery-indicator {
+      display: flex;
+      align-items: center;
+      gap: 5px;
+      font-size: 0.9em;
+      color: white;
+    }
+
+    .battery-level {
+      width: 40px;
+      height: 18px;
+      border: 2px solid white;
+      border-radius: 3px;
+      position: relative;
+    }
+
+    .battery-level:after {
+      content: "";
+      position: absolute;
+      right: -5px;
+      top: 4px;
+      height: 10px;
+      width: 3px;
+      background: white;
+      border-radius: 0 2px 2px 0;
+    }
+
+    .battery-fill {
+      height: 100%;
+      background: white;
+      width: 0%;
+      transition: width 0.5s;
+    }
+
+    #signal-strength {
+      display: flex;
+      align-items: flex-end;
+      height: 15px;
+      gap: 2px;
+    }
+
+    .signal-bar {
+      width: 4px;
+      background: white;
+      border-radius: 1px;
+    }
+
+    .signal-bar-1 { height: 4px; }
+    .signal-bar-2 { height: 7px; }
+    .signal-bar-3 { height: 10px; }
+    .signal-bar-4 { height: 13px; }
+
+    .signal-active {
+      background: #4CAF50;
     }
 
     #log {
-      margin-top: 20px;
-      height: 120px;
-      width: 90%;
-      max-width: 350px;
+      position: fixed;
+      bottom: 10px;
+      left: 10px;
+      width: 250px;
+      max-height: 80px;
       overflow-y: auto;
-      border: 1px dashed #999;
-      padding: 10px;
-      font-size: 0.9em;
-      background: white;
+      border: 1px solid #ddd;
+      padding: 8px;
+      font-size: 0.8em;
+      background: rgba(255, 255, 255, 0.9);
       text-align: left;
-    }
-    
-    #controls {
-      display: flex;
-      margin-top: 20px;
-      gap: 15px;
-    }
-    
-    .rotation-button {
-      padding: 15px 20px;
-      font-size: 1.2em;
-      background-color: #7e57c2;
-      color: white;
-      border: none;
-      border-radius: 8px;
-      cursor: pointer;
-      user-select: none;
-      touch-action: manipulation;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      min-width: 120px;
-    }
-    
-    .rotation-button:active {
-      background-color: #5e35b1;
-      transform: scale(0.98);
-    }
-    
-    .rotation-button svg {
-      margin-right: 8px;
-    }
-    
-    .title {
-      font-size: 1.5em;
-      margin-bottom: 20px;
-      font-weight: bold;
+      z-index: 100;
+      border-radius: 5px;
+      box-shadow: 0 2px 5px rgba(0,0,0,0.1);
     }
 
     /* Force landscape orientation */
@@ -170,32 +311,49 @@
   
   <div class="landscape-container">
     <div class="left-panel">
-      <div class="title">Robot Controller</div>
-      <button id="connect">🔌 Connect to Robot</button>
-      <div id="controls">
-        <button id="rotate-90" class="rotation-button">
-          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-            <path d="M9 18l6-6-6-6"></path>
-          </svg>
-          90° Turn
-        </button>
-        <button id="rotate-180" class="rotation-button">
-          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-            <path d="M9 6l6 6-6 6"></path>
-          </svg>
-          180° Turn
-        </button>
+      <div class="status-panel">
+        <div class="connection-status">
+          <div class="status-indicator status-disconnected" id="status-indicator"></div>
+          <span id="connection-status">Not Connected</span>
+          <div id="battery-indicator">
+            <div class="battery-level">
+              <div class="battery-fill" id="battery-fill"></div>
+            </div>
+            <span id="battery-percent">--</span>
+          </div>
+          <div id="signal-strength">
+            <div class="signal-bar signal-bar-1"></div>
+            <div class="signal-bar signal-bar-2"></div>
+            <div class="signal-bar signal-bar-3"></div>
+            <div class="signal-bar signal-bar-4"></div>
+          </div>
+        </div>
       </div>
-      <pre id="log">Not connected</pre>
+      <img id="connect-image" src="New Project (2).png" alt="Click to Connect">
+      
+      <div class="control-panel">
+        <div class="control-group">
+          <span class="control-label">Response</span>
+          <input type="range" id="response-slider" min="1" max="3" step="0.1" value="2">
+        </div>
+        <div class="control-group">
+          <span class="control-label">Dead Zone</span>
+          <input type="range" id="deadzone-slider" min="0" max="0.5" step="0.05" value="0.1">
+        </div>
+      </div>
     </div>
     
     <div class="right-panel">
       <div id="joystick-container">
         <div id="joystick-base"></div>
+        <div id="joystick-indicator"></div>
         <div id="joystick-thumb"></div>
       </div>
+      <div id="joystick-values">Speed: 0.00 | Turn: 0.00</div>
     </div>
   </div>
+  
+  <pre id="log">Not connected</pre>
 
   <script>
     const serviceUUID = "ef285d93-51b4-4996-b0d1-eade88331410";
@@ -204,27 +362,134 @@
 
     let device, server, speedChar, turnChar;
     let connected = false;
-    let isRotating = false;
+    let reconnectAttempts = 0;
+    let maxReconnectAttempts = 5;
+    let reconnectTimer = null;
+    let batteryLevel = 0;
+    let signalStrength = 0;
+    
+    // Control parameters
+    let responseExponent = 2; // Exponential response factor
+    let deadZone = 0.1;       // Center dead zone
     
     const logElement = document.getElementById("log");
-    const connectButton = document.getElementById("connect");
-    const rotate90Button = document.getElementById("rotate-90");
-    const rotate180Button = document.getElementById("rotate-180");
+    const connectImage = document.getElementById("connect-image");
+    const connectionStatus = document.getElementById("connection-status");
+    const statusIndicator = document.getElementById("status-indicator");
+    const batteryFill = document.getElementById("battery-fill");
+    const batteryPercent = document.getElementById("battery-percent");
+    const joystickValues = document.getElementById("joystick-values");
+    const responseSlider = document.getElementById("response-slider");
+    const deadzoneSlider = document.getElementById("deadzone-slider");
+    const signalBars = document.querySelectorAll(".signal-bar");
+
+    // Update control parameters from sliders
+    responseSlider.addEventListener("input", (e) => {
+      responseExponent = parseFloat(e.target.value);
+      log(`Response curve set to ${responseExponent.toFixed(1)}`);
+    });
+    
+    deadzoneSlider.addEventListener("input", (e) => {
+      deadZone = parseFloat(e.target.value);
+      log(`Dead zone set to ${(deadZone * 100).toFixed(0)}%`);
+    });
 
     function log(msg) {
       const atBottom = logElement.scrollHeight - logElement.scrollTop <= logElement.clientHeight + 1;
-      logElement.textContent += "\n" + msg;
+      const now = new Date();
+      const timeStr = `${now.getHours().toString().padStart(2, '0')}:${now.getMinutes().toString().padStart(2, '0')}:${now.getSeconds().toString().padStart(2, '0')}`;
+      logElement.textContent += `\n[${timeStr}] ${msg}`;
       console.log(msg);
 
       if (atBottom) {
         logElement.scrollTop = logElement.scrollHeight;
       }
+      
+      // Keep only last 10 lines
+      const lines = logElement.textContent.split('\n');
+      if (lines.length > 10) {
+        logElement.textContent = lines.slice(-10).join('\n');
+      }
     }
 
-    // BLE write handling with queuing system
+    // Update UI indicators
+    function updateBatteryIndicator(level) {
+      if (level === undefined) return;
+      batteryLevel = level;
+      batteryFill.style.width = `${level}%`;
+      batteryPercent.textContent = `${level}%`;
+      
+      // Color based on level
+      if (level < 20) {
+        batteryFill.style.background = "#F44336";
+      } else if (level < 50) {
+        batteryFill.style.background = "#FFC107";
+      } else {
+        batteryFill.style.background = "#4CAF50";
+      }
+    }
+    
+    function updateSignalStrength(strength) {
+      if (strength === undefined) return;
+      signalStrength = strength;
+      
+      // Update signal bars
+      signalBars.forEach((bar, index) => {
+        if ((index + 1) * 25 <= strength) {
+          bar.classList.add("signal-active");
+        } else {
+          bar.classList.remove("signal-active");
+        }
+      });
+    }
+    
+    function updateConnectionStatus(status) {
+      connectionStatus.textContent = status;
+      
+      // Update the status indicator
+      statusIndicator.classList.remove("status-connected", "status-connecting", "status-disconnected");
+      
+      if (status === "Connected") {
+        statusIndicator.classList.add("status-connected");
+        connectImage.classList.add("connected");
+        connectImage.classList.remove("connecting");
+        updateBatteryIndicator(80); // Mock battery level - replace with real data
+        updateSignalStrength(100);  // Mock signal strength - replace with real data
+      } else if (status.includes("Connecting") || status.includes("Searching")) {
+        statusIndicator.classList.add("status-connecting");
+        connectImage.classList.add("connecting");
+        connectImage.classList.remove("connected");
+      } else {
+        statusIndicator.classList.add("status-disconnected");
+        connectImage.classList.remove("connected", "connecting");
+        updateBatteryIndicator(0);
+        updateSignalStrength(0);
+      }
+    }
+
+    // Enhanced BLE communication with throttling
     let writeInProgress = false;
     let queuedSpeedValue = null;
     let queuedTurnValue = null;
+    let writeQueue = [];
+    let lastWriteTime = 0;
+    const minWriteInterval = 50; // Minimum 50ms between writes
+    
+    // Throttle function for BLE writes
+    function throttledWrite(callback) {
+      const now = Date.now();
+      const timeElapsed = now - lastWriteTime;
+      
+      if (timeElapsed >= minWriteInterval) {
+        lastWriteTime = now;
+        callback();
+      } else {
+        setTimeout(() => {
+          lastWriteTime = Date.now();
+          callback();
+        }, minWriteInterval - timeElapsed);
+      }
+    }
 
     async function writeCharacteristics() {
       if (!connected) return;
@@ -232,47 +497,148 @@
       writeInProgress = true;
 
       try {
-        if (!server.connected) {
-          log("Was disconnected, reconnecting");
-          await server.connect();
-          await connectServices();
-          log("Reconnected to characteristics");
+        if (server && !server.connected) {
+          log("Connection lost, reconnecting...");
+          updateConnectionStatus("Reconnecting...");
+          await reconnect();
         }
 
-        if (queuedSpeedValue !== null) {
-          let valueToWrite = queuedSpeedValue;
-          queuedSpeedValue = null; // Clear the queued value
-          await speedChar.writeValueWithResponse(getFloat32Buffer(valueToWrite));
-          console.log(`Speed written: ${valueToWrite}`);
-        }
-        
-        if (queuedTurnValue !== null) {
-          let valueToWrite = queuedTurnValue;
-          queuedTurnValue = null; // Clear the queued value
-          await turnChar.writeValueWithResponse(getFloat32Buffer(valueToWrite));
-          console.log(`Turn written: ${valueToWrite}`);
-        }
+        throttledWrite(async () => {
+          try {
+            if (queuedSpeedValue !== null) {
+              let valueToWrite = queuedSpeedValue;
+              queuedSpeedValue = null; // Clear the queued value
+              await speedChar.writeValueWithResponse(getFloat32Buffer(valueToWrite));
+              console.log(`Speed written: ${valueToWrite}`);
+            }
+            
+            if (queuedTurnValue !== null) {
+              let valueToWrite = queuedTurnValue;
+              queuedTurnValue = null; // Clear the queued value
+              await turnChar.writeValueWithResponse(getFloat32Buffer(valueToWrite));
+              console.log(`Turn written: ${valueToWrite}`);
+            }
+          } catch (error) {
+            console.error("Failed during throttled write:", error);
+          } finally {
+            writeInProgress = false;
+            if (queuedSpeedValue !== null || queuedTurnValue !== null) {
+              writeCharacteristics();
+            }
+          }
+        });
       } catch (error) {
         console.error("Failed to write:", error);
-        log("Failed to write: " + error);
-      } finally {
-        writeInProgress = false; // Reset the flag
-        if (queuedSpeedValue !== null || queuedTurnValue !== null) {
-          writeCharacteristics();
+        log("Communication error: " + error.message);
+        writeInProgress = false;
+        
+        // Try to reconnect if we have connection issues
+        if (error.message && error.message.includes("GATT operation failed")) {
+          attemptReconnect();
         }
       }
     }
 
-    // Queue values to send instead of sending directly
+    async function reconnect() {
+      if (reconnectAttempts >= maxReconnectAttempts) {
+        log("Max reconnection attempts reached");
+        updateConnectionStatus("Connection failed");
+        connected = false;
+        reconnectAttempts = 0;
+        return false;
+      }
+      
+      try {
+        reconnectAttempts++;
+        // Exponential backoff for reconnect attempts
+        const backoffTime = Math.min(1000 * Math.pow(2, reconnectAttempts - 1), 10000);
+        log(`Reconnect attempt ${reconnectAttempts} in ${backoffTime}ms`);
+        
+        await new Promise(resolve => setTimeout(resolve, backoffTime));
+        
+        if (device && device.gatt) {
+          server = await device.gatt.connect();
+          await connectServices();
+          reconnectAttempts = 0;
+          log("Reconnected successfully");
+          updateConnectionStatus("Connected");
+          return true;
+        }
+      } catch (error) {
+        log(`Reconnect failed: ${error.message}`);
+        return false;
+      }
+      return false;
+    }
+
+    function attemptReconnect() {
+      if (reconnectTimer) return;
+      
+      reconnectTimer = setTimeout(async () => {
+        reconnectTimer = null;
+        if (!connected) return;
+        
+        log("Connection appears unstable, trying to reconnect");
+        updateConnectionStatus("Reconnecting...");
+        const success = await reconnect();
+        
+        if (!success && connected) {
+          log("Reconnection failed, disconnecting");
+          connected = false;
+          updateConnectionStatus("Disconnected");
+        }
+      }, 1000);
+    }
+
+    // Queue values to send with improved response curve
     function queueBLEValues(speed, turn) {
       if (!connected) return;
+      
+      // Apply dead zone
+      if (Math.abs(speed) < deadZone && Math.abs(turn) < deadZone) {
+        speed = 0;
+        turn = 0;
+      } else {
+        // Re-normalize values after dead zone
+        if (Math.abs(speed) < deadZone) {
+          speed = 0;
+        } else {
+          const speedSign = Math.sign(speed);
+          speed = speedSign * (Math.abs(speed) - deadZone) / (1 - deadZone);
+        }
+        
+        if (Math.abs(turn) < deadZone) {
+          turn = 0;
+        } else {
+          const turnSign = Math.sign(turn);
+          turn = turnSign * (Math.abs(turn) - deadZone) / (1 - deadZone);
+        }
+        
+        // Apply exponential response curve for more precise control
+        speed = Math.sign(speed) * Math.pow(Math.abs(speed), responseExponent);
+        turn = Math.sign(turn) * Math.pow(Math.abs(turn), responseExponent);
+      }
+      
+      // Clamp values to [-1, 1]
+      speed = Math.max(-1, Math.min(1, speed));
+      turn = Math.max(-1, Math.min(1, turn));
+      
+      // Update the joystick values display
+      joystickValues.textContent = `Speed: ${speed.toFixed(2)} | Turn: ${turn.toFixed(2)}`;
       
       // Only update the log when values change significantly
       const significantChange = 
         (queuedSpeedValue === null || Math.abs(speed - queuedSpeedValue) > 0.05) || 
         (queuedTurnValue === null || Math.abs(turn - queuedTurnValue) > 0.05);
+      
+      // Only log when starting from zero or stopping to zero (to reduce spam)
+      const movementStateChange = 
+        (queuedSpeedValue === 0 && speed !== 0) || 
+        (queuedSpeedValue !== 0 && speed === 0) ||
+        (queuedTurnValue === 0 && turn !== 0) ||
+        (queuedTurnValue !== 0 && turn === 0);
         
-      if (significantChange) {
+      if (significantChange && movementStateChange) {
         log(`🕹️ Speed: ${speed.toFixed(2)} | Turn: ${turn.toFixed(2)}`);
       }
       
@@ -282,19 +648,43 @@
     }
 
     async function connectServices() {
-      const service = await server.getPrimaryService(serviceUUID);
-      speedChar = await service.getCharacteristic(speedUUID);
-      turnChar = await service.getCharacteristic(turnUUID);
+      try {
+        const service = await server.getPrimaryService(serviceUUID);
+        speedChar = await service.getCharacteristic(speedUUID);
+        turnChar = await service.getCharacteristic(turnUUID);
+        log("Services connected successfully");
+        
+        // Simulate getting device info (in a real implementation, you'd get this from the device)
+        simulateDeviceInfo();
+      } catch (error) {
+        log("Failed to get services: " + error.message);
+        throw error;
+      }
     }
 
-    connectButton.addEventListener("click", async () => {
+    // This would be replaced with real device info from BLE characteristics
+    function simulateDeviceInfo() {
+      // In a real implementation, you would read these values from appropriate BLE characteristics
+      const mockBatteryLevel = Math.floor(70 + Math.random() * 30);
+      const mockSignalStrength = Math.floor(75 + Math.random() * 25);
+      
+      updateBatteryIndicator(mockBatteryLevel);
+      updateSignalStrength(mockSignalStrength);
+      
+      // Simulate periodic updates
+      if (connected) {
+        setTimeout(simulateDeviceInfo, 10000 + Math.random() * 5000);
+      }
+    }
+
+    connectImage.addEventListener("click", async () => {
       if (connected) {
         // Disconnect
         connected = false;
-        connectButton.innerText = "🔌 Connect to Robot";
+        updateConnectionStatus("Disconnected");
         try {
           server.disconnect();
-          log("Disconnected");
+          log("Disconnected successfully");
         } catch (error) {
           log("Error disconnecting: " + error);
         }
@@ -303,71 +693,46 @@
 
       try {
         log("Looking for device...");
+        updateConnectionStatus("Searching...");
         device = await navigator.bluetooth.requestDevice({
           filters: [{ services: [serviceUUID] }]
         });
         
         log("Device found");
+        updateConnectionStatus("Connecting...");
         server = await device.gatt.connect();
         log("Server connected");
         
+        // Set up disconnection event listener
+        device.addEventListener('gattserverdisconnected', handleDisconnection);
+        
         await connectServices();
-        log("✅ Connected and characteristics ready.");
+        log("✅ Connected and characteristics ready");
         
         connected = true;
-        connectButton.innerText = "Disconnect";
+        updateConnectionStatus("Connected");
       } catch (e) {
-        if (e instanceof DOMException) {
+        if (e instanceof DOMException && e.name === "NotFoundError") {
           log("No device found");
+          updateConnectionStatus("Not Connected");
           return;
         }
         log("❌ Error: " + e);
+        updateConnectionStatus("Connection Failed");
       }
     });
-    
-    // Function to execute rotation sequence
-    async function executeRotation(degrees) {
-      if (!connected || isRotating) return;
+
+    function handleDisconnection() {
+      log("Device disconnected");
       
-      isRotating = true;
-      
-      try {
-        // Stop any current movement
-        queueBLEValues(0.0, 0.0);
-        await new Promise(resolve => setTimeout(resolve, 200));
-        
-        // Calculate rotation direction and duration
-        const direction = 1.0; // Positive for clockwise, negative for counter-clockwise
-        const turnValue = direction * 1.0; // Full turn power
-        const duration = degrees === 90 ? 500 : 1000; // Adjust these values based on your robot's actual turning speed
-        
-        log(`🔄 Starting ${degrees}° rotation...`);
-        
-        // Send turn command
-        queueBLEValues(0.0, turnValue);
-        
-        // Wait for rotation to complete
-        await new Promise(resolve => setTimeout(resolve, duration));
-        
-        // Stop rotation
-        queueBLEValues(0.0, 0.0);
-        
-        log(`✅ ${degrees}° rotation completed`);
-      } catch (error) {
-        log(`❌ Error during rotation: ${error}`);
-      } finally {
-        isRotating = false;
+      if (connected) {
+        updateConnectionStatus("Connection lost");
+        // Only try to reconnect if we didn't manually disconnect
+        attemptReconnect();
+      } else {
+        updateConnectionStatus("Disconnected");
       }
     }
-    
-    // Rotation button event listeners
-    rotate90Button.addEventListener("click", () => {
-      executeRotation(90);
-    });
-    
-    rotate180Button.addEventListener("click", () => {
-      executeRotation(180);
-    });
 
     function getFloat32Buffer(value) {
       const buffer = new ArrayBuffer(4);
@@ -382,9 +747,6 @@
     let dragging = false;
 
     function moveThumb(x, y) {
-      // Don't allow joystick movement during rotation
-      if (isRotating) return;
-      
       const rect = base.getBoundingClientRect();
       const centerX = rect.width / 2;
       const centerY = rect.height / 2;
@@ -420,14 +782,13 @@
 
     // Mouse events
     base.addEventListener("mousedown", (e) => {
-      if (isRotating) return;
       dragging = true;
       const rect = base.getBoundingClientRect();
       moveThumb(e.clientX - rect.left, e.clientY - rect.top);
     });
 
     document.addEventListener("mousemove", (e) => {
-      if (!dragging || isRotating) return;
+      if (!dragging) return;
       const rect = base.getBoundingClientRect();
       moveThumb(e.clientX - rect.left, e.clientY - rect.top);
     });
@@ -441,7 +802,6 @@
 
     // Touch events
     base.addEventListener("touchstart", (e) => {
-      if (isRotating) return;
       dragging = true;
       const rect = base.getBoundingClientRect();
       const touch = e.touches[0];
@@ -450,7 +810,7 @@
     }, { passive: false });
 
     base.addEventListener("touchmove", (e) => {
-      if (!dragging || isRotating) return;
+      if (!dragging) return;
       const rect = base.getBoundingClientRect();
       const touch = e.touches[0];
       moveThumb(touch.clientX - rect.left, touch.clientY - rect.top);
