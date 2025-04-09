@@ -36,6 +36,7 @@
       display: flex;
       justify-content: center;
       align-items: center;
+      position: relative;
     }
 
     #connect-image {
@@ -110,6 +111,21 @@
       z-index: 20;
     }
 
+    #reset-orientation {
+      background-color: #3f51b5;
+      color: white;
+      padding: 10px 20px;
+      margin: 10px;
+      border: none;
+      border-radius: 5px;
+      cursor: pointer;
+      position: absolute;
+      bottom: 20px;
+      left: 50%;
+      transform: translateX(-50%);
+      z-index: 20;
+    }
+
     /* Force landscape orientation */
     @media screen and (orientation: portrait) {
       .rotate-prompt {
@@ -162,6 +178,7 @@
         <div id="joystick-base"></div>
         <div id="joystick-thumb"></div>
       </div>
+      <button id="reset-orientation">Reset Orientation</button>
     </div>
   </div>
   
@@ -178,6 +195,7 @@
     const logElement = document.getElementById("log");
     const connectImage = document.getElementById("connect-image");
     const connectionStatus = document.getElementById("connection-status");
+    const resetOrientationButton = document.getElementById("reset-orientation");
 
     function log(msg) {
       const atBottom = logElement.scrollHeight - logElement.scrollTop <= logElement.clientHeight + 1;
@@ -299,6 +317,23 @@
         log("❌ Error: " + e);
         connectionStatus.textContent = "Connection Failed";
       }
+    });
+
+    // Reset orientation button event listener
+    resetOrientationButton.addEventListener("click", () => {
+      if (!connected) return;
+      
+      log("🧭 Resetting orientation reference");
+      
+      // Send special signal that the ESP32 will recognize
+      queueBLEValues(0, -0.001);
+      
+      // Reset to zero after a brief delay
+      setTimeout(() => {
+        if (!dragging) {
+          queueBLEValues(0, 0);
+        }
+      }, 100);
     });
 
     function getFloat32Buffer(value) {
