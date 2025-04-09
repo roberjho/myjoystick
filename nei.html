@@ -9,24 +9,55 @@
       font-family: sans-serif;
       margin: 0;
       padding: 0;
-      text-align: center;
       background: #f5f5f5;
-      display: flex;
-      flex-direction: column;
-      align-items: center;
-      justify-content: center;
       height: 100vh;
+      width: 100vw;
+      overflow: hidden;
     }
 
-    #connect {
-      padding: 1em 2em;
-      font-size: 1.2em;
-      margin-bottom: 20px;
+    .landscape-container {
+      display: flex;
+      flex-direction: row;
+      height: 100%;
+      width: 100%;
+    }
+
+    .left-panel {
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      justify-content: center;
+      align-items: center;
+      position: relative;
+    }
+
+    .right-panel {
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      justify-content: center;
+      align-items: center;
+      position: relative;
+    }
+
+    #connect-image {
+      width: 100%;
+      height: 100%;
+      object-fit: contain;
+      cursor: pointer;
+      transition: transform 0.2s;
+      position: absolute;
+      top: 0;
+      left: 0;
+    }
+
+    #connect-image.connected {
+      box-shadow: 0 0 15px rgba(76, 175, 80, 0.7);
     }
 
     #joystick-container {
-      width: 300px;
-      height: 300px;
+      width: 280px;
+      height: 280px;
       position: relative;
       touch-action: none;
     }
@@ -37,6 +68,7 @@
       background: #e0e0e0;
       border-radius: 50%;
       position: absolute;
+      box-shadow: inset 0 0 10px rgba(0,0,0,0.2);
     }
 
     #joystick-thumb {
@@ -45,31 +77,171 @@
       background: #da7373;
       border-radius: 50%;
       position: absolute;
-      top: 110px;
-      left: 110px;
+      top: 100px;
+      left: 100px;
       transition: transform 0.05s;
+      box-shadow: 0 3px 6px rgba(0,0,0,0.2);
+    }
+
+    #compass-container {
+      position: absolute;
+      top: 10px;
+      left: 10px;
+      width: 80px;
+      height: 80px;
+      background: rgba(255,255,255,0.7);
+      border-radius: 50%;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      box-shadow: 0 2px 5px rgba(0,0,0,0.2);
+      z-index: 10;
+    }
+
+    #compass-arrow {
+      width: 6px;
+      height: 40px;
+      background: linear-gradient(to bottom, #e74c3c 0%, #e74c3c 50%, #3498db 50%, #3498db 100%);
+      transform-origin: center bottom;
     }
 
     #log {
-      margin-top: 20px;
-      height: 100px;
-      width: 90%;
-      max-width: 400px;
+      position: fixed;
+      top: 50%;
+      left: 50%;
+      transform: translate(-50%, -50%);
+      width: 180px;
+      max-height: 60px;
       overflow-y: auto;
       border: 1px dashed #999;
-      padding: 10px;
+      padding: 5px;
+      font-size: 0.8em;
+      background: rgba(255, 255, 255, 0.7);
+      text-align: left;
+      z-index: 100;
+    }
+
+    .button-container {
+      display: flex;
+      justify-content: center;
+      margin-top: 20px;
+      gap: 10px;
+    }
+
+    .connection-status {
+      position: absolute;
+      top: 10px;
+      right: 10px;
+      font-size: 1em;
+      padding: 5px 15px;
+      background-color: rgba(0, 0, 0, 0.7);
+      color: white;
+      border-radius: 20px;
+      transition: opacity 0.3s;
+      z-index: 20;
+    }
+
+    #reset-orientation {
+      background-color: #3f51b5;
+      color: white;
+      padding: 10px 20px;
+      margin: 10px;
+      border: none;
+      border-radius: 5px;
+      cursor: pointer;
+    }
+
+    #calibrate-orientation {
+      background-color: #009688;
+      color: white;
+      padding: 10px 20px;
+      margin: 10px;
+      border: none;
+      border-radius: 5px;
+      cursor: pointer;
+    }
+
+    #orientation-toggle {
+      position: absolute;
+      top: 50px;
+      right: 10px;
+      background-color: rgba(0, 0, 0, 0.7);
+      color: white;
+      padding: 5px 15px;
+      border: none;
+      border-radius: 20px;
       font-size: 0.9em;
-      background: white;
+      cursor: pointer;
+      z-index: 20;
+    }
+
+    .toggle-active {
+      background-color: #4CAF50 !important;
+    }
+
+    /* Force landscape orientation */
+    @media screen and (orientation: portrait) {
+      .rotate-prompt {
+        display: flex;
+        position: fixed;
+        top: 0;
+        left: 0;
+        width: 100%;
+        height: 100%;
+        background: #000;
+        color: white;
+        justify-content: center;
+        align-items: center;
+        z-index: 1000;
+        font-size: 1.5em;
+        text-align: center;
+        padding: 20px;
+      }
+      
+      .landscape-container {
+        display: none;
+      }
+    }
+    
+    @media screen and (orientation: landscape) {
+      .rotate-prompt {
+        display: none;
+      }
+      
+      .landscape-container {
+        display: flex;
+      }
     }
   </style>
 </head>
 
 <body>
-  <button id="connect">🔌 Connect to Robot</button>
-  <div id="joystick-container">
-    <div id="joystick-base"></div>
-    <div id="joystick-thumb"></div>
+  <div class="rotate-prompt">
+    Please rotate your device to landscape mode
   </div>
+  
+  <div class="landscape-container">
+    <div class="left-panel">
+      <div class="connection-status" id="connection-status">Not Connected</div>
+      <img id="connect-image" src="New Project (2).png" alt="Click to Connect">
+      <div id="compass-container">
+        <div id="compass-arrow"></div>
+      </div>
+    </div>
+    
+    <div class="right-panel">
+      <div id="joystick-container">
+        <div id="joystick-base"></div>
+        <div id="joystick-thumb"></div>
+      </div>
+      <div class="button-container">
+        <button id="reset-orientation">Reset Orientation</button>
+        <button id="calibrate-orientation">Calibrate Position</button>
+      </div>
+      <button id="orientation-toggle">Position Tracking: OFF</button>
+    </div>
+  </div>
+  
   <pre id="log">Not connected</pre>
 
   <script>
@@ -79,8 +251,21 @@
 
     let device, server, speedChar, turnChar;
     let connected = false;
+    let usePositionTracking = false;
+    
+    // Device orientation variables
+    let deviceHeading = 0;
+    let robotHeading = 0;
+    let calibrationOffset = 0;
+    let hasPermission = false;
+    
     const logElement = document.getElementById("log");
-    const connectButton = document.getElementById("connect");
+    const connectImage = document.getElementById("connect-image");
+    const connectionStatus = document.getElementById("connection-status");
+    const resetOrientationButton = document.getElementById("reset-orientation");
+    const calibrateOrientationButton = document.getElementById("calibrate-orientation");
+    const orientationToggle = document.getElementById("orientation-toggle");
+    const compassArrow = document.getElementById("compass-arrow");
 
     function log(msg) {
       const atBottom = logElement.scrollHeight - logElement.scrollTop <= logElement.clientHeight + 1;
@@ -92,7 +277,7 @@
       }
     }
 
-    // BLE write handling with queuing system (from your working version)
+    // BLE write handling with queuing system
     let writeInProgress = false;
     let queuedSpeedValue = null;
     let queuedTurnValue = null;
@@ -105,9 +290,11 @@
       try {
         if (!server.connected) {
           log("Was disconnected, reconnecting");
+          connectionStatus.textContent = "Reconnecting...";
           await server.connect();
           await connectServices();
           log("Reconnected to characteristics");
+          connectionStatus.textContent = "Connected";
         }
 
         if (queuedSpeedValue !== null) {
@@ -158,11 +345,12 @@
       turnChar = await service.getCharacteristic(turnUUID);
     }
 
-    connectButton.addEventListener("click", async () => {
+    connectImage.addEventListener("click", async () => {
       if (connected) {
         // Disconnect
         connected = false;
-        connectButton.innerText = "🔌 Connect to Robot";
+        connectImage.classList.remove("connected");
+        connectionStatus.textContent = "Disconnected";
         try {
           server.disconnect();
           log("Disconnected");
@@ -174,11 +362,13 @@
 
       try {
         log("Looking for device...");
+        connectionStatus.textContent = "Searching...";
         device = await navigator.bluetooth.requestDevice({
           filters: [{ services: [serviceUUID] }]
         });
         
         log("Device found");
+        connectionStatus.textContent = "Connecting...";
         server = await device.gatt.connect();
         log("Server connected");
         
@@ -186,13 +376,116 @@
         log("✅ Connected and characteristics ready.");
         
         connected = true;
-        connectButton.innerText = "Disconnect";
+        connectImage.classList.add("connected");
+        connectionStatus.textContent = "Connected";
+        
+        // Request device orientation permission after connecting
+        requestOrientationPermission();
       } catch (e) {
         if (e instanceof DOMException) {
           log("No device found");
+          connectionStatus.textContent = "Not Connected";
           return;
         }
         log("❌ Error: " + e);
+        connectionStatus.textContent = "Connection Failed";
+      }
+    });
+
+    async function requestOrientationPermission() {
+      // Request permission to access device orientation
+      if (typeof DeviceOrientationEvent !== 'undefined' && 
+          typeof DeviceOrientationEvent.requestPermission === 'function') {
+        try {
+          const permissionState = await DeviceOrientationEvent.requestPermission();
+          if (permissionState === 'granted') {
+            hasPermission = true;
+            window.addEventListener('deviceorientation', handleOrientation);
+            log("✅ Orientation access granted");
+          } else {
+            log("❌ Orientation permission denied");
+          }
+        } catch (error) {
+          log("❌ Error requesting orientation: " + error);
+        }
+      } else {
+        // For devices that don't need permission (non-iOS or older iOS)
+        hasPermission = true;
+        window.addEventListener('deviceorientation', handleOrientation);
+        log("Orientation monitoring started");
+      }
+    }
+
+    function handleOrientation(event) {
+      // Get compass heading (alpha) in degrees (0-360)
+      // iOS uses webkitCompassHeading instead of alpha
+      let heading = 0;
+      
+      if (event.webkitCompassHeading) {
+        // iOS devices
+        heading = event.webkitCompassHeading;
+      } else if (event.alpha !== null) {
+        // Android/other devices - convert from counterclockwise to clockwise
+        heading = 360 - event.alpha;
+      }
+      
+      deviceHeading = heading;
+      
+      // Update the compass visual
+      compassArrow.style.transform = `rotate(${heading}deg)`;
+    }
+
+    // Reset the robot's internal orientation
+    resetOrientationButton.addEventListener("click", () => {
+      if (!connected) return;
+      
+      log("🧭 Resetting orientation reference");
+      
+      // Send special signal that the ESP32 will recognize
+      queueBLEValues(0, -0.001);
+      
+      // Reset to zero after a brief delay
+      setTimeout(() => {
+        if (!dragging) {
+          queueBLEValues(0, 0);
+        }
+      }, 100);
+    });
+
+    // Calibrate the controller's position relative to the robot
+    calibrateOrientationButton.addEventListener("click", () => {
+      if (!hasPermission) {
+        requestOrientationPermission();
+        return;
+      }
+      
+      // Store the current device orientation as the "front" direction
+      calibrationOffset = deviceHeading;
+      robotHeading = 0;
+      
+      log(`🧭 Position calibrated: ${calibrationOffset.toFixed(0)}°`);
+    });
+
+    // Toggle position tracking
+    orientationToggle.addEventListener("click", () => {
+      usePositionTracking = !usePositionTracking;
+      
+      if (usePositionTracking) {
+        orientationToggle.textContent = "Position Tracking: ON";
+        orientationToggle.classList.add("toggle-active");
+        
+        if (!hasPermission) {
+          requestOrientationPermission();
+        }
+        
+        // Calibrate immediately when turning on
+        calibrationOffset = deviceHeading;
+        robotHeading = 0;
+        log("🧭 Position tracking enabled");
+      } else {
+        orientationToggle.textContent = "Position Tracking: OFF";
+        orientationToggle.classList.remove("toggle-active");
+        log("🧭 Position tracking disabled");
       }
     });
 
@@ -207,6 +500,23 @@
     const base = document.getElementById("joystick-container");
 
     let dragging = false;
+
+    // Convert angle from degrees to radians
+    function toRadians(degrees) {
+      return degrees * (Math.PI / 180);
+    }
+
+    // Transform joystick coordinates based on relative position
+    function rotateCoordinates(x, y, angle) {
+      const radians = toRadians(angle);
+      const cos = Math.cos(radians);
+      const sin = Math.sin(radians);
+      
+      return {
+        x: x * cos - y * sin,
+        y: x * sin + y * cos
+      };
+    }
 
     function moveThumb(x, y) {
       const rect = base.getBoundingClientRect();
@@ -225,11 +535,22 @@
       thumb.style.left = `${centerX + clampedX - 40}px`;
       thumb.style.top = `${centerY + clampedY - 40}px`;
 
-      const normX = clampedX / max;
-      const normY = clampedY / max;
+      let normX = clampedX / max;
+      let normY = -clampedY / max;  // Negative because Y is inverted on screen
+      
+      // Apply position-based rotation if enabled
+      if (usePositionTracking && hasPermission) {
+        // Calculate the angle difference between current heading and calibration
+        const relativeAngle = (deviceHeading - calibrationOffset + 360) % 360;
+        
+        // Rotate the joystick inputs according to the user's position
+        const rotated = rotateCoordinates(normY, normX, relativeAngle);
+        normY = rotated.x;
+        normX = rotated.y;
+      }
 
       // Use the queuing system instead of direct writes
-      queueBLEValues(-normY, normX);
+      queueBLEValues(normY, normX);
     }
 
     function resetThumb() {
@@ -297,6 +618,22 @@
 
     // Init thumb
     resetThumb();
+    
+    // Check and force landscape orientation
+    function checkOrientation() {
+      if (window.innerHeight > window.innerWidth) {
+        document.querySelector('.rotate-prompt').style.display = 'flex';
+        document.querySelector('.landscape-container').style.display = 'none';
+      } else {
+        document.querySelector('.rotate-prompt').style.display = 'none';
+        document.querySelector('.landscape-container').style.display = 'flex';
+      }
+    }
+    
+    // Check orientation on load and resize
+    window.addEventListener('load', checkOrientation);
+    window.addEventListener('resize', checkOrientation);
+    window.addEventListener('orientationchange', checkOrientation);
   </script>
 </body>
 </html>
